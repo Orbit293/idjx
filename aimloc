@@ -1,6 +1,7 @@
 local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RS = game:GetService("RunService")
+local TS = game:GetService("TeleportService")
 local lp = Players.LocalPlayer
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -19,12 +20,27 @@ local okCC, ccResult = pcall(function()
 end)
 if okCC then cc = ccResult end
 
+local SCRIPT_URL = "https://raw.githubusercontent.com/Orbit293/idjx/refs/heads/main/main%20cheat"
+
+local function requeue()
+    queue_on_teleport('loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()')
+end
+
+requeue()
+
+TS.LocalPlayerArrivedFromTeleport:Connect(requeue)
+
+lp.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Started then
+        requeue()
+    end
+end)
+
 local on = false
 local gui = Instance.new("ScreenGui", lp.PlayerGui)
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 
--- ESP folder
 local espFolder = Instance.new("Folder", gui)
 espFolder.Name = "ESP"
 
@@ -73,7 +89,6 @@ UIS.InputBegan:Connect(function(i, g)
     end
 end)
 
--- ESP dot cache
 local espDots = {}
 
 local function getOrCreateDot(player)
@@ -99,19 +114,15 @@ end
 
 Players.PlayerRemoving:Connect(removeDot)
 
--- Wall check via raycast
 local function hasLOS(from, to)
-    local dir = (to - from)
-    local ray = RaycastParams.new()
-    ray.FilterDescendantsInstances = {workspace.CurrentCamera, lp.Character or game:GetService("Workspace")}
-    ray.FilterType = Enum.RaycastFilterType.Exclude
-    -- exclude all player characters
     local chars = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character then table.insert(chars, p.Character) end
     end
+    local ray = RaycastParams.new()
     ray.FilterDescendantsInstances = chars
-    local result = workspace:Raycast(from, dir, ray)
+    ray.FilterType = Enum.RaycastFilterType.Exclude
+    local result = workspace:Raycast(from, to - from, ray)
     return result == nil
 end
 
@@ -140,7 +151,6 @@ local function closest()
         local aimPos = head.Position
         local sp, vis = cam:WorldToViewportPoint(aimPos)
         if not vis then continue end
-        -- wall check
         if not hasLOS(camPos, aimPos) then continue end
         local d = ((sp.X - cx)^2 + (sp.Y - cy)^2)^0.5
         if d < bd then bd = d; best = {pos = aimPos, camPos = camPos} end
@@ -148,7 +158,6 @@ local function closest()
     return best
 end
 
--- ESP + aimbot loop
 RS.Heartbeat:Connect(function()
     local cam = workspace.CurrentCamera
     local myEnv = lp:GetAttribute("EnvironmentID")
@@ -173,7 +182,6 @@ RS.Heartbeat:Connect(function()
         if onScreen then
             dot.Visible = true
             dot.Position = UDim2.fromOffset(sp.X, sp.Y)
-            -- red if visible through walls, white if behind wall
             local los = hasLOS(cam.CFrame.Position, head.Position)
             dot.BackgroundColor3 = los and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(180, 180, 180)
         else
@@ -186,5 +194,3 @@ RS.Heartbeat:Connect(function()
     if not t then return end
     if cc then cc:MimicRotation(CFrame.lookAt(t.camPos, t.pos).Rotation) end
 end)
-
-queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Orbit293/idjx/refs/heads/main/main%20cheat"))()')
