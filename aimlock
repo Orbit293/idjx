@@ -23,6 +23,11 @@ local on = false
 local gui = Instance.new("ScreenGui", lp.PlayerGui)
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
+
+-- ESP folder
+local espFolder = Instance.new("Folder", gui)
+espFolder.Name = "ESP"
+
 local btn = Instance.new("ImageButton", gui)
 btn.Size = UDim2.fromOffset(70, 70)
 btn.Position = UDim2.fromOffset(workspace.CurrentCamera.ViewportSize.X - 90, workspace.CurrentCamera.ViewportSize.Y - 160)
@@ -60,7 +65,6 @@ end)
 
 UIS.InputBegan:Connect(function(i, g)
     if g then return end
-    -- Keyboard Q, controller Y (Xbox) / Triangle (PS)
     if i.KeyCode == Enum.KeyCode.Q
     or i.KeyCode == Enum.KeyCode.ButtonY
     or i.KeyCode == Enum.KeyCode.ButtonTriangle then
@@ -68,6 +72,54 @@ UIS.InputBegan:Connect(function(i, g)
         btn.BackgroundTransparency = on and 0 or 0.5
     end
 end)
+
+-- ESP dot cache
+local espDots = {}
+
+local function getOrCreateDot(player)
+    if espDots[player] and espDots[player].Parent then
+        return espDots[player]
+    end
+    local dot = Instance.new("Frame", espFolder)
+    dot.Size = UDim2.fromOffset(8, 8)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    dot.BorderSizePixel = 0
+    dot.AnchorPoint = Vector2.new(0.5, 0.5)
+    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+    espDots[player] = dot
+    return dot
+end
+
+local function removeDot(player)
+    if espDots[player] then
+        espDots[player]:Destroy()
+        espDots[player] = nil
+    end
+end
+
+Players.PlayerRemoving:Connect(removeDot)
+
+-- Wall check via raycast
+local function hasLOS(from, to)
+    local dir = (to - from)
+    local ray = RaycastParams.new()
+    ray.FilterDescendantsInstances = {workspace.CurrentCamera, lp.Character or game:GetService("Workspace")}
+    ray.FilterType = Enum.RaycastFilterType.Exclude
+    -- exclude all player characters
+    local chars = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(chars, p.Character) end
+    end
+    ray.FilterDescendantsInstances = chars
+    local result = workspace:Raycast(from, dir, ray)
+    return result == nil
+end
+
+local function isAlive(char)
+    if not char then return false end
+    local hum = char:FindFirstChild("Humanoid")
+    return hum and hum.Health > 0
+end
 
 local function closest()
     if not cc or not cc._current_subject then return nil end
@@ -82,24 +134,57 @@ local function closest()
         if p:GetAttribute("EnvironmentID") ~= myEnv then continue end
         if myTeam ~= nil and p:GetAttribute("TeamID") == myTeam then continue end
         local char = p.Character
-        if not char then continue end
+        if not isAlive(char) then continue end
         local head = char:FindFirstChild("Head")
-        local hum = char:FindFirstChild("Humanoid")
-        if not head or not hum or hum.Health <= 0 then continue end
+        if not head then continue end
         local aimPos = head.Position
         local sp, vis = cam:WorldToViewportPoint(aimPos)
         if not vis then continue end
+        -- wall check
+        if not hasLOS(camPos, aimPos) then continue end
         local d = ((sp.X - cx)^2 + (sp.Y - cy)^2)^0.5
         if d < bd then bd = d; best = {pos = aimPos, camPos = camPos} end
     end
     return best
 end
 
+-- ESP + aimbot loop
 RS.Heartbeat:Connect(function()
+    local cam = workspace.CurrentCamera
+    local myEnv = lp:GetAttribute("EnvironmentID")
+    local myTeam = lp:GetAttribute("TeamID")
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == lp then continue end
+        local char = p.Character
+        local head = char and char:FindFirstChild("Head")
+        local alive = isAlive(char)
+
+        if not head or not alive
+        or p:GetAttribute("EnvironmentID") ~= myEnv
+        or (myTeam ~= nil and p:GetAttribute("TeamID") == myTeam) then
+            removeDot(p)
+            continue
+        end
+
+        local sp, onScreen = cam:WorldToViewportPoint(head.Position)
+        local dot = getOrCreateDot(p)
+
+        if onScreen then
+            dot.Visible = true
+            dot.Position = UDim2.fromOffset(sp.X, sp.Y)
+            -- red if visible through walls, white if behind wall
+            local los = hasLOS(cam.CFrame.Position, head.Position)
+            dot.BackgroundColor3 = los and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(180, 180, 180)
+        else
+            dot.Visible = false
+        end
+    end
+
     if not on then return end
     local t = closest()
     if not t then return end
     if cc then cc:MimicRotation(CFrame.lookAt(t.camPos, t.pos).Rotation) end
 end)
 
-queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Orbit293/idjx/refs/heads/main/hi"))()')
+queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Orbit293/idjx/refs/heads/main/main%20cheat"))()')
